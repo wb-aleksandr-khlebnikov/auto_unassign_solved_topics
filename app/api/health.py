@@ -22,8 +22,16 @@ async def readiness(request: Request):
         "checks": checks,
         "scheduler": {
             "running": scheduler.state.running,
-            "last_cycle_started_at": scheduler.state.last_cycle_started_at,
-            "last_cycle_finished_at": scheduler.state.last_cycle_finished_at,
+            "last_cycle_started_at": (
+                scheduler.state.last_cycle_started_at.isoformat()
+                if scheduler.state.last_cycle_started_at
+                else None
+            ),
+            "last_cycle_finished_at": (
+                scheduler.state.last_cycle_finished_at.isoformat()
+                if scheduler.state.last_cycle_finished_at
+                else None
+            ),
             "last_cycle_status": scheduler.state.last_cycle_status,
         },
     }

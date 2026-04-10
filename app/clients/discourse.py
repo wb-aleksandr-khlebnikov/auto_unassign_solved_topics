@@ -59,4 +59,4 @@ class DiscourseClient:
 
     async def ping(self) -> bool:
         data = await self._http.request_json("GET", "/site.json")
-        return "site" in data or "users" in data
+        return "notification_types" in data or "filters" in data
