@@ -38,30 +38,30 @@ class FakeAssign:
 
 
 class FakeStateRepo:
-    def get_topic_state(self, topic_id):
+    async def get_topic_state(self, topic_id):
         return None
 
-    def list_topics_with_pending_reassign(self):
+    async def list_topics_with_pending_reassign(self):
         return []
 
-    def upsert_unassigned_state(
+    async def upsert_unassigned_state(
         self, topic_id, assignee_user_id, assignee_username, last_seen_post_id
     ):
         raise AssertionError("state upsert must not be called for unsolved topic")
 
-    def mark_reassigned(self, topic_id):
+    async def mark_reassigned(self, topic_id):
         return None
 
-    def mark_skipped(self, topic_id, last_seen_post_id=None):
+    async def mark_skipped(self, topic_id, last_seen_post_id=None):
         return None
 
-    def update_last_seen_post(self, topic_id, last_seen_post_id):
+    async def update_last_seen_post(self, topic_id, last_seen_post_id):
         return None
 
-    def append_action(self, action):
+    async def append_action(self, action):
         return None
 
-    def cleanup_history(self, retention_days):
+    async def cleanup_history(self, retention_days):
         return 0
 
 

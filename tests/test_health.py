@@ -6,12 +6,12 @@ from app.services.health import HealthService
 
 
 class OkState:
-    def ping(self):
+    async def ping(self):
         return None
 
 
 class BadState:
-    def ping(self):
+    async def ping(self):
         raise RuntimeError("db down")
 
 

@@ -26,7 +26,7 @@ async def lifespan(app: FastAPI):
     engine = build_engine(settings.sqlite_path)
     session_factory = build_session_factory(engine)
     state_repo = StateRepository(session_factory)
-    state_repo.init_schema(engine)
+    await state_repo.init_schema(engine)
 
     headers = build_discourse_headers(settings.discourse_api_key, settings.discourse_api_username)
     http = HttpClient(settings.discourse_base_url, headers, settings.retry)

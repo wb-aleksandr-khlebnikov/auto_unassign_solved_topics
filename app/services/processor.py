@@ -63,7 +63,7 @@ class TopicProcessor:
                     summary.failed += 1
                     logger.exception("topic_unassign_failed topic_id=%s", topic_id)
 
-        pending_reassign = self._state.list_topics_with_pending_reassign()
+        pending_reassign = await self._state.list_topics_with_pending_reassign()
         for row in pending_reassign:
             try:
                 result = await self._process_reassign(row)
@@ -72,7 +72,7 @@ class TopicProcessor:
                 summary.failed += 1
                 logger.exception("topic_reassign_failed topic_id=%s", row.topic_id)
 
-        deleted = self._state.cleanup_history(self._settings.history_retention_days)
+        deleted = await self._state.cleanup_history(self._settings.history_retention_days)
         duration = perf_counter() - started
         logger.info("cycle_summary %s retention_deleted=%s", summary.as_log_dict(duration), deleted)
         return summary
@@ -81,79 +81,85 @@ class TopicProcessor:
         snapshot = await self._discourse.get_topic_snapshot(topic_id)
 
         if snapshot.closed or snapshot.archived:
-            self._record(
+            await self._record(
                 topic_id, "skipped", "success", "topic_closed_or_archived", snapshot.assignment
             )
-            self._state.mark_skipped(topic_id, max(snapshot.post_ids, default=0))
+            await self._state.mark_skipped(topic_id, max(snapshot.post_ids, default=0))
             return "skipped"
 
         if not snapshot.is_solved:
-            self._record(
+            await self._record(
                 topic_id, "skipped", "success", "topic_not_solved_now", snapshot.assignment
             )
-            self._state.mark_skipped(topic_id, max(snapshot.post_ids, default=0))
+            await self._state.mark_skipped(topic_id, max(snapshot.post_ids, default=0))
             return "skipped"
 
         if snapshot.assignment.username is None and snapshot.assignment.user_id is None:
-            self._record(topic_id, "skipped", "noop", "assignment_absent", snapshot.assignment)
-            self._state.mark_skipped(topic_id, max(snapshot.post_ids, default=0))
+            await self._record(
+                topic_id, "skipped", "noop", "assignment_absent", snapshot.assignment
+            )
+            await self._state.mark_skipped(topic_id, max(snapshot.post_ids, default=0))
             return "skipped"
 
-        previous = self._state.get_topic_state(topic_id)
+        previous = await self._state.get_topic_state(topic_id)
         if (
             previous is not None
             and previous.last_action == "reassigned"
             and previous.last_unassigned_username
             and previous.last_unassigned_username == snapshot.assignment.username
         ):
-            self._record(
+            await self._record(
                 topic_id, "skipped", "success", "loop_guard_recent_reassign", snapshot.assignment
             )
-            self._state.mark_skipped(topic_id, max(snapshot.post_ids, default=0))
+            await self._state.mark_skipped(topic_id, max(snapshot.post_ids, default=0))
             return "skipped"
 
         latest = await self._discourse.get_topic_snapshot(topic_id)
         if latest.closed or latest.archived:
-            self._record(
+            await self._record(
                 topic_id, "skipped", "success", "topic_changed_before_unassign", latest.assignment
             )
-            self._state.mark_skipped(topic_id, max(latest.post_ids, default=0))
+            await self._state.mark_skipped(topic_id, max(latest.post_ids, default=0))
             return "skipped"
 
         if not latest.is_solved:
-            self._record(
+            await self._record(
                 topic_id,
                 "skipped",
                 "success",
                 "topic_not_solved_after_refresh",
                 latest.assignment,
             )
-            self._state.mark_skipped(topic_id, max(latest.post_ids, default=0))
+            await self._state.mark_skipped(topic_id, max(latest.post_ids, default=0))
             return "skipped"
 
         if latest.assignment.username is None and latest.assignment.user_id is None:
-            self._record(
+            await self._record(
                 topic_id, "skipped", "noop", "assignment_absent_after_refresh", latest.assignment
             )
-            self._state.mark_skipped(topic_id, max(latest.post_ids, default=0))
+            await self._state.mark_skipped(topic_id, max(latest.post_ids, default=0))
             return "skipped"
 
         if self._settings.dry_run:
-            self._record(topic_id, "unassigned", "dry-run", "would_unassign", latest.assignment)
+            await self._record(
+                topic_id, "unassigned", "dry-run", "would_unassign", latest.assignment
+            )
             return "unassigned"
 
         status = await self._assign.unassign(topic_id)
         if status >= 400:
-            self._record(topic_id, "failed", "error", f"unassign_http_{status}", latest.assignment)
+            await self._record(
+                topic_id, "failed", "error", f"unassign_http_{status}", latest.assignment
+            )
             return "failed"
 
-        self._state.upsert_unassigned_state(
+        await self._state.upsert_unassigned_state(
             topic_id=topic_id,
             assignee_user_id=latest.assignment.user_id,
             assignee_username=latest.assignment.username,
             last_seen_post_id=max(latest.post_ids, default=0),
         )
-        self._record(topic_id, "unassigned", "success", None, latest.assignment)
+        await self._record(topic_id, "unassigned", "success", None, latest.assignment)
         return "unassigned"
 
     async def _process_reassign(self, state_row: TopicState) -> str:
@@ -161,10 +167,10 @@ class TopicProcessor:
         snapshot = await self._discourse.get_topic_snapshot(topic_id)
 
         if snapshot.closed or snapshot.archived:
-            self._record(
+            await self._record(
                 topic_id, "skipped", "success", "topic_closed_or_archived", snapshot.assignment
             )
-            self._state.mark_skipped(
+            await self._state.mark_skipped(
                 topic_id, max(snapshot.post_ids, default=state_row.last_seen_post_id)
             )
             return "skipped"
@@ -174,8 +180,8 @@ class TopicProcessor:
                 state_row.last_unassigned_username
                 and snapshot.assignment.username == state_row.last_unassigned_username
             ):
-                self._state.mark_reassigned(topic_id)
-                self._record(
+                await self._state.mark_reassigned(topic_id)
+                await self._record(
                     topic_id,
                     "reassigned",
                     "success",
@@ -183,7 +189,7 @@ class TopicProcessor:
                     snapshot.assignment,
                 )
                 return "reassigned"
-            self._record(
+            await self._record(
                 topic_id, "skipped", "success", "already_assigned_other_user", snapshot.assignment
             )
             return "skipped"
@@ -200,10 +206,10 @@ class TopicProcessor:
                 trigger_post_id = post_id
                 break
 
-        self._state.update_last_seen_post(topic_id, last_seen_post_id=max(new_posts))
+        await self._state.update_last_seen_post(topic_id, last_seen_post_id=max(new_posts))
 
         if trigger_post_id is None:
-            self._record(
+            await self._record(
                 topic_id, "skipped", "success", "new_posts_staff_only", snapshot.assignment
             )
             return "skipped"
@@ -211,12 +217,14 @@ class TopicProcessor:
         assignee_user_id = state_row.last_unassigned_user_id
         assignee_username = state_row.last_unassigned_username
         if assignee_user_id is None and not assignee_username:
-            self._record(topic_id, "failed", "error", "no_saved_assignee", snapshot.assignment)
+            await self._record(
+                topic_id, "failed", "error", "no_saved_assignee", snapshot.assignment
+            )
             return "failed"
 
         latest = await self._discourse.get_topic_snapshot(topic_id)
         if latest.assignment.username is not None or latest.assignment.user_id is not None:
-            self._record(
+            await self._record(
                 topic_id,
                 "skipped",
                 "success",
@@ -226,7 +234,7 @@ class TopicProcessor:
             return "skipped"
 
         if self._settings.dry_run:
-            self._record(
+            await self._record(
                 topic_id,
                 "reassigned",
                 "dry-run",
@@ -238,11 +246,13 @@ class TopicProcessor:
 
         status = await self._assign.assign(topic_id, assignee_user_id, assignee_username)
         if status >= 400:
-            self._record(topic_id, "failed", "error", f"assign_http_{status}", latest.assignment)
+            await self._record(
+                topic_id, "failed", "error", f"assign_http_{status}", latest.assignment
+            )
             return "failed"
 
-        self._state.mark_reassigned(topic_id)
-        self._record(
+        await self._state.mark_reassigned(topic_id)
+        await self._record(
             topic_id,
             "reassigned",
             "success",
@@ -252,7 +262,7 @@ class TopicProcessor:
         )
         return "reassigned"
 
-    def _record(
+    async def _record(
         self,
         topic_id: int,
         action: str,
@@ -261,7 +271,7 @@ class TopicProcessor:
         assignment,
         post_id: int | None = None,
     ) -> None:
-        self._state.append_action(
+        await self._state.append_action(
             ActionRecord(
                 topic_id=topic_id,
                 action=action,
