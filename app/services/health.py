@@ -32,7 +32,7 @@ class HealthService:
         }
 
         try:
-            self._state.ping()
+            await self._state.ping()
         except Exception as exc:
             checks["sqlite"] = f"error:{exc.__class__.__name__}"
 

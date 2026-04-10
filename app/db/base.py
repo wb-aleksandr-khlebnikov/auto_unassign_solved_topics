@@ -1,18 +1,17 @@
-from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import DeclarativeBase
 
 
 class Base(DeclarativeBase):
     pass
 
 
-def build_engine(sqlite_path: str):
-    return create_engine(
-        f"sqlite:///{sqlite_path}",
-        connect_args={"check_same_thread": False},
+def build_engine(sqlite_path: str) -> AsyncEngine:
+    return create_async_engine(
+        f"sqlite+aiosqlite:///{sqlite_path}",
         future=True,
     )
 
 
-def build_session_factory(engine):
-    return sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+def build_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
+    return async_sessionmaker(engine, expire_on_commit=False)
