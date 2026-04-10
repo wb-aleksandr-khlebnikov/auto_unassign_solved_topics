@@ -10,3 +10,8 @@ build/
 .env
 data/
 coverage.xml
+
+# Temp files (e.g., debug scripts during development)
+*_temp.py
+*.tmp
+
